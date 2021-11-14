@@ -1,8 +1,10 @@
 import math
 import random
 import discord
+import re
 
-TOKEN = "insert token here"
+with open("token.txt", "r") as f:
+    TOKEN = f.read()
 
 client = discord.Client()
 
@@ -13,10 +15,10 @@ async def on_ready():
 
 
 def switch_sign_at_index(i):
-    if board[i] == "X":
-        board[i] = "O"
+    if board[int(i)] == "X":
+        board[int(i)] = "O"
     else:
-        board[i] = "X"
+        board[int(i)] = "X"
 
 
 def is_win():
@@ -104,6 +106,9 @@ async def game_loop():
 
 @client.event
 async def on_reaction_add(reaction, user):
+    if game_stage != 1:
+        return
+
     if reaction.message == game_msg:
         if str(user) != player:
             return
@@ -130,18 +135,18 @@ async def on_reaction_add(reaction, user):
         elif emoji == '✅':
             flips += 1
             to_switch = get_list_to_switch(local_slot)
-            for s in range(len(to_switch)):
-                switch_sign_at_index(to_switch[s])
+            for s in to_switch:
+                switch_sign_at_index(s)
         selectedSlot = local_slot
         await game_loop()
 
 
-async def init_game():
+async def init_game(size):
     global boardSize, selectedSlot, board, moves, flips
-    boardSize = 5
+    boardSize = size
     selectedSlot = math.floor(boardSize ** 2 / 2)
     if boardSize % 2 == 0:
-        selectedSlot -= boardSize / 2 + 1  # sets the selected slot to the top right of the middle 4
+        selectedSlot -= boardSize / 2 + 1  # sets the selected slot to the top left of the middle 4
     board = init_board()
     moves, flips = 0, 0
     await game_loop()
@@ -161,14 +166,34 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    if message.channel.name == "lights-out":
-        global game_stage
-        if user_message == 's!start_local_game' and game_stage == 0:
-            global player, channel
+    if message.channel.name == "lights-out" or message.channel.name == "bot-commands":
+        global game_stage, player, channel
+        if user_message == "s!start" and game_stage == 0:
             player = user
             channel = message.channel
             game_stage = 1
-            await init_game()
+            await init_game(5)
+        # regex matching "s!start " + any number
+        elif re.search(r"^(?:s!start )\d+$", user_message) and game_stage == 0:
+            # gets just the number by splitting at space and taking the second part (s!start/6)
+            num = int(user_message.split(" ")[1])
+            if num < 3 or num > 15:
+                await message.channel.send("Please choose a value between 3 and 15.")
+                return
+            player = user
+            channel = message.channel
+            game_stage = 1
+            await init_game(num)
+        elif user_message == "s!end" and game_stage == 1:
+            if message.author.guild_permissions.administrator or \
+                    message.author.top_role.permissions.administrator:
+                await message.channel.send("Game terminated by an administrator.")
+                game_stage = 0
+            elif user == player:
+                await message.channel.send("Game stopped.")
+                game_stage = 0
+            else:
+                await message.channel.send("You don't have permission to do that.")
 
 
 client.run(TOKEN)
