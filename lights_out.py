@@ -3,6 +3,8 @@ import random
 import discord
 import re
 
+REACTIONS = ['⬆️', '➡️', '⬇️', '⬅️', '✅']
+
 with open("token.txt", "r") as f:
     TOKEN = f.read()
 
@@ -88,20 +90,23 @@ def get_list_to_switch(i):
     return switch_list
 
 
-async def game_loop():
+async def game_loop(emoji):
     global game_msg
     embed = discord.Embed(title="Lights Out!", description=get_board(), color=0x20B702)
-    game_msg = await channel.send(embed=embed)
+    # if the game just started, send message with board and react,
+    # otherwise edit and remove user reaction
+    if game_msg == 0:
+        game_msg = await channel.send(embed=embed)
+        for reaction in REACTIONS:
+            await game_msg.add_reaction(reaction)
+    else:
+        await game_msg.edit(embed=embed)
+        await game_msg.remove_reaction(emoji, player)
     if is_win():
         await channel.send("GG!")
         global game_stage
         game_stage = 0
         return
-    await game_msg.add_reaction('⬆️')
-    await game_msg.add_reaction('➡️')
-    await game_msg.add_reaction('⬇️')
-    await game_msg.add_reaction('⬅️')
-    await game_msg.add_reaction('✅')
 
 
 @client.event
@@ -110,7 +115,7 @@ async def on_reaction_add(reaction, user):
         return
 
     if reaction.message == game_msg:
-        if str(user) != player:
+        if user != player:
             return
         global selectedSlot, moves, flips
         moves += 1
@@ -138,7 +143,7 @@ async def on_reaction_add(reaction, user):
             for s in to_switch:
                 switch_sign_at_index(s)
         selectedSlot = local_slot
-        await game_loop()
+        await game_loop(emoji)
 
 
 async def init_game(size):
@@ -149,7 +154,7 @@ async def init_game(size):
         selectedSlot -= boardSize / 2 + 1  # sets the selected slot to the top left of the middle 4
     board = init_board()
     moves, flips = 0, 0
-    await game_loop()
+    await game_loop(0)
 
 
 boardSize, selectedSlot, moves, board, flips, player, game_stage, channel, game_msg = [0 for _ in range(9)]
@@ -160,7 +165,7 @@ boardSize, selectedSlot, moves, board, flips, player, game_stage, channel, game_
 
 @client.event
 async def on_message(message):
-    user = str(message.author)
+    user = message.author
     user_message = str(message.content)
 
     if message.author == client.user:
