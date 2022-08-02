@@ -1,7 +1,9 @@
 import math
 import random
 import discord
-import re
+
+from discord import Option
+
 from game import Game
 
 REACTIONS = ['⬆️', '➡️', '⬇️', '⬅️', '✅']
@@ -10,12 +12,46 @@ games = []
 with open("token.txt", "r") as f:
     TOKEN = f.read()
 
-client = discord.Client()
+bot = discord.Bot()
 
 
-@client.event
+@bot.event
 async def on_ready():
-    print("online")
+    print(f"online as {bot.user}")
+
+
+@bot.slash_command(description='Start a game of Lights Out!')
+async def lights_out(ctx,
+                     size: Option(int, "Board Size", min_value=3, max_value=15, default=5)):
+    game = Game(ctx.author)
+    # register game in list
+    games.append(game)
+    await init_game(game, size, ctx)
+
+
+@bot.slash_command(description='Terminate all current games of Lights Out!')
+async def terminate_lights_out(ctx):
+    for game in games:
+        if game.player == ctx.author:
+            embed = discord.Embed(title=f"Lights Out! - {game.player.name} (Terminated)",
+                                  description=get_board(game),
+                                  color=0x20B702)
+            await game.msg.edit(embed=embed)
+            games.remove(game)
+            await ctx.respond("Game terminated successfully.")
+            return
+    # if user doesn't have any active game
+    if ctx.author.guild_permissions.administrator or \
+            ctx.author.top_role.permissions.administrator:
+        for game in games:
+            embed = discord.Embed(title=f"Lights Out! - {game.player.name} (Terminated)",
+                                  description=get_board(game),
+                                  color=0x20B702)
+            await game.msg.edit(embed=embed)
+            games.remove(game)
+        await ctx.respond("All current games were terminated by an administrator.")
+        return
+    await ctx.respond("You don't have permission to do that.")
 
 
 def switch_sign_at_index(game, i):
@@ -92,12 +128,13 @@ def get_list_to_switch(board_size, i):
     return switch_list
 
 
-async def game_loop(game, emoji):
+async def game_loop(game, emoji, ctx):
     embed = discord.Embed(title=f"Lights Out! - {game.player.name}", description=get_board(game), color=0x20B702)
     # if the game just started, send message with board and react,
     # otherwise edit and remove user reaction
     if game.msg == 0:
-        game.msg = await game.channel.send(embed=embed)
+        response = await ctx.respond(embed=embed)
+        game.msg = await response.original_message()
         for reaction in REACTIONS:
             await game.msg.add_reaction(reaction)
     else:
@@ -109,10 +146,10 @@ async def game_loop(game, emoji):
         return
 
 
-@client.event
+@bot.event
 async def on_reaction_add(reaction, user):
     for game in games:
-        if reaction.message != game.msg:
+        if reaction.message.id != game.msg.id:
             continue
         if user != game.player:
             return
@@ -141,66 +178,17 @@ async def on_reaction_add(reaction, user):
             for s in to_switch:
                 switch_sign_at_index(game, s)
         game.selectedSlot = local_slot
-        await game_loop(game, emoji)
+        await game_loop(game, emoji, 0)
 
 
-async def init_game(game, size):
+async def init_game(game, size, ctx):
     game.boardSize = size
     game.selectedSlot = math.floor(game.boardSize ** 2 / 2)
     if game.boardSize % 2 == 0:
         game.selectedSlot -= game.boardSize / 2 + 1  # sets the selected slot to the top left of the middle 4
     game.board = init_board(size)
-    await game_loop(game, 0)
 
-# game_stage - 0 = not started; 1 = playing (awaiting input)
-
-
-@client.event
-async def on_message(message):
-    user = message.author
-    user_message = str(message.content)
-
-    if message.author == client.user:
-        return
-
-    if message.channel.name == "lights-out" or message.channel.name == "bot-commands":
-        if user_message == "s!start":
-            game = Game(user, message.channel)
-            # register game in list
-            games.append(game)
-            await init_game(game, 5)
-        # regex matching "s!start " + any number
-        elif re.search(r"^(?:s!start )\d+$", user_message):
-            # gets just the number by splitting at space and taking the second part (s!start/6)
-            num = int(user_message.split(" ")[1])
-            if num < 3 or num > 15:
-                await message.channel.send("Please choose a value between 3 and 15.")
-                return
-            game = Game(user, message.channel)
-            # register game in list
-            games.append(game)
-            await init_game(game, num)
-        elif user_message == "s!end":
-            for game in games:
-                if game.player == user:
-                    embed = discord.Embed(title=f"Lights Out! - {game.player.name} (Terminated)",
-                                          description=get_board(game),
-                                          color=0x20B702)
-                    await game.msg.edit(embed=embed)
-                    games.remove(game)
-                    return
-            # if user doesn't have any active game
-            if message.author.guild_permissions.administrator or \
-                    message.author.top_role.permissions.administrator:
-                await message.channel.send("All current games were terminated by an administrator.")
-                for game in games:
-                    embed = discord.Embed(title=f"Lights Out! - {game.player.name} (Terminated)",
-                                          description=get_board(game),
-                                          color=0x20B702)
-                    await game.msg.edit(embed=embed)
-                    games.remove(game)
-                return
-            await message.channel.send("You don't have permission to do that.")
+    await game_loop(game, 0, ctx)
 
 
-client.run(TOKEN)
+bot.run(TOKEN)

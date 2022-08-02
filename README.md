@@ -2,13 +2,22 @@
 
 ## How to use
 
-This is a simple Discord bot I made in two days, attempting to recreate the popular minigame Lights Out.
+This is a simple Discord bot which recreates the popular 
+minigame Lights Out.
 
-To start a game, send `s!start` or `s!start <size of playing field>` in a channel called `#lights-out` or `#bot-commands`.
+To start a game, use the command `/lights_out` or 
+`/lights_out <board size>`.
 
-As of right now, the game has no AFK period and the bot cannot run multiple games simultaneously, so administrators can use the command `s!end` to terminate the game if necessary.
+As of right now, the game has no AFK period and the memory 
+can get cluttered with ongoing games, so administrators can 
+use the command `/terminate_lights_out` to terminate all 
+ongoing games if necessary.
 
-Your goal is to turn all the tiles white, while always flipping the tile you're standing on and the tiles adjacent.
+A player can also terminate their own game using the same
+command, `/terminate_lights_out`.
+
+Your goal is to turn all the tiles white, while always flipping 
+the tile you're standing on and the tiles adjacent.
 
 I might make it more customizable and add more features in the future.
 
